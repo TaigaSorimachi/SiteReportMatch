@@ -1,0 +1,1293 @@
+// ============================================================================
+// 建築業界 人材マッチング管理システム — Prisma Schema
+// 全42テーブル
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ##########################################################################
+// A. 組織・ユーザー基盤 (5テーブル)
+// ##########################################################################
+
+/// A-01 会社マスタ — 自社/元請/協力会社/下請を統合管理
+model Company {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyName      String   @map("company_name") @db.VarChar(200)
+  companyNameKana  String?  @map("company_name_kana") @db.VarChar(200)
+  companyType      String   @map("company_type") @db.VarChar(30)
+  corporateNumber  String?  @unique @map("corporate_number") @db.VarChar(13)
+  representative   String?  @db.VarChar(100)
+  postalCode       String?  @map("postal_code") @db.VarChar(8)
+  address          String?  @db.VarChar(300)
+  addressLat       Decimal? @map("address_lat") @db.Decimal(10, 7)
+  addressLng       Decimal? @map("address_lng") @db.Decimal(10, 7)
+  phone            String?  @db.VarChar(20)
+  fax              String?  @db.VarChar(20)
+  email            String?  @db.VarChar(200)
+  website          String?  @db.VarChar(300)
+  invoiceRegNo     String?  @map("invoice_reg_no") @db.VarChar(20)
+  ccusCompanyId    String?  @map("ccus_company_id") @db.VarChar(30)
+
+  bankName        String? @map("bank_name") @db.VarChar(100)
+  bankBranch      String? @map("bank_branch") @db.VarChar(100)
+  bankAccountType String? @map("bank_account_type") @db.VarChar(10)
+  bankAccountNo   String? @map("bank_account_no") @db.VarChar(20)
+  bankAccountName String? @map("bank_account_name") @db.VarChar(100)
+  paymentTerms    String? @map("payment_terms") @db.VarChar(100)
+
+  notes    String? @db.Text
+  isActive Boolean @default(true) @map("is_active")
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  deletedBy String?   @map("deleted_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  settings          CompanySetting?
+  users             User[]
+  projects          Project[]       @relation("CompanyProjects")
+  clientProjects    Project[]       @relation("ClientProjects")
+  primeProjects     Project[]       @relation("PrimeProjects")
+  demandPostings    DemandPosting[]
+  supplyPostings    SupplyPosting[]
+  customFieldDefs   CustomFieldDef[]
+  invoicesIssued    Invoice[]       @relation("InvoiceIssuer")
+  invoicesReceived  Invoice[]       @relation("InvoiceClient")
+  payrolls          Payroll[]
+  costLedgerEntries CostLedger[]
+  dailyReports      DailyReport[]
+  clientContracts   MatchContract[] @relation("ClientContract")
+  workerContracts   MatchContract[] @relation("WorkerCompanyContract")
+
+  @@map("companies")
+}
+
+/// A-02 会社別システム設定
+model CompanySetting {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId String @unique @map("company_id") @db.Uuid
+
+  defaultReportMode     String  @default("selectable") @map("default_report_mode") @db.VarChar(20)
+  allowWorkerModeSwitch Boolean @default(true) @map("allow_worker_mode_switch")
+  requirePhoto          Boolean @default(false) @map("require_photo")
+  requireSafetyRecord   Boolean @default(false) @map("require_safety_record")
+
+  gpsEnabled          Boolean @default(false) @map("gps_enabled")
+  gpsWorkerCanDisable Boolean @default(false) @map("gps_worker_can_disable")
+  geofenceEnabled     Boolean @default(false) @map("geofence_enabled")
+  geofenceRadiusM     Int     @default(300) @map("geofence_radius_m")
+
+  matchingEnabled     Boolean @default(true) @map("matching_enabled")
+  matchingAutoApprove Boolean @default(false) @map("matching_auto_approve")
+
+  standardWorkHours      Decimal @default(8.0) @map("standard_work_hours") @db.Decimal(3, 1)
+  overtimeThresholdHours Decimal @default(8.0) @map("overtime_threshold_hours") @db.Decimal(3, 1)
+
+  extra Json @default("{}") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@map("company_settings")
+}
+
+/// A-03 ユーザー — admin(管理者)/owner(オーナー)/worker(作業者)の3ロール。LINE連携前提
+model User {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId String? @map("company_id") @db.Uuid
+
+  lineUserId      String? @unique @map("line_user_id") @db.VarChar(50)
+  lineDisplayName String? @map("line_display_name") @db.VarChar(100)
+
+  lastName      String  @map("last_name") @db.VarChar(50)
+  firstName     String  @map("first_name") @db.VarChar(50)
+  lastNameKana  String? @map("last_name_kana") @db.VarChar(50)
+  firstNameKana String? @map("first_name_kana") @db.VarChar(50)
+  email         String? @db.VarChar(200)
+  passwordHash  String? @map("password_hash") @db.VarChar(200)
+  phone         String? @db.VarChar(20)
+  birthDate     DateTime? @map("birth_date") @db.Date
+  gender        String? @db.VarChar(10)
+  avatarUrl     String? @map("avatar_url") @db.VarChar(500)
+
+  postalCode String?  @map("postal_code") @db.VarChar(8)
+  address    String?  @db.VarChar(300)
+  addressLat Decimal? @map("address_lat") @db.Decimal(10, 7)
+  addressLng Decimal? @map("address_lng") @db.Decimal(10, 7)
+
+  role         String  @db.VarChar(30) /// admin/owner/worker
+  isIndividual Boolean @default(false) @map("is_individual")
+
+  defaultDailyRate  Int? @map("default_daily_rate")
+  defaultHourlyRate Int? @map("default_hourly_rate")
+
+  employmentStatus String @default("active") @map("employment_status") @db.VarChar(20)
+  availability     String @default("available") @db.VarChar(20)
+
+  ccusWorkerId String? @map("ccus_worker_id") @db.VarChar(30)
+
+  taxCategory    String?  @map("tax_category") @db.VarChar(20)
+  myNumberStored Boolean  @default(false) @map("my_number_stored")
+
+  lineNotifyEnabled  Boolean @default(true) @map("line_notify_enabled")
+  gpsPersonalEnabled Boolean @default(true) @map("gps_personal_enabled")
+
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  deletedBy String?   @map("deleted_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company              Company?              @relation(fields: [companyId], references: [id])
+  workerProfile        WorkerProfile?
+  userLicenses         UserLicense[]
+  workerSkills         WorkerSkill[]
+  workerAvailability   WorkerAvailability[]
+  evaluationsReceived  WorkerEvaluation[]    @relation("EvaluationWorker")
+  evaluationsGiven     WorkerEvaluation[]    @relation("EvaluationEvaluator")
+  dailyReports         DailyReport[]         @relation("ReportWorker")
+  approvedReports      DailyReport[]         @relation("ReportApprover")
+  locationLogs         LocationLog[]
+  geofenceEvents       GeofenceEvent[]
+  demandApplications   DemandApplication[]   @relation("ApplicationApplicant")
+  respondedApplications DemandApplication[]  @relation("ApplicationResponder")
+  demandMessages       DemandMessage[]
+  supplyPostings       SupplyPosting[]
+  supplyInquiries      SupplyInquiry[]
+  supplyMessages       SupplyMessage[]
+  notificationLogs     NotificationLog[]
+  projectAssignments   ProjectAssignment[]
+  salesProjects        Project[]             @relation("SalesPerson")
+  managedProjects      Project[]             @relation("SiteManager")
+  foremanProjects      Project[]             @relation("Foreman")
+  uploadedDocuments    ProjectDocument[]
+  safetyRecords        SafetyRecord[]
+  demandPostings       DemandPosting[]
+  matchReviewsGiven    MatchReview[]         @relation("ReviewReviewer")
+  matchReviewsReceived MatchReview[]         @relation("ReviewReviewee")
+  matchCancelLogs      MatchCancelLog[]
+  matchContractsWorker MatchContract[]
+  payrolls             Payroll[]
+
+  @@index([companyId])
+  @@index([availability])
+  @@index([lineUserId])
+  @@map("users")
+}
+
+/// A-04 資格マスタ
+model LicenseMaster {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  licenseName     String   @map("license_name") @db.VarChar(200)
+  licenseCategory String?  @map("license_category") @db.VarChar(50)
+  hasExpiry       Boolean  @default(false) @map("has_expiry")
+  renewalMonths   Int?     @map("renewal_months")
+  sortOrder       Int      @default(0) @map("sort_order")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  userLicenses UserLicense[]
+
+  @@map("license_master")
+}
+
+/// A-05 保有資格
+model UserLicense {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  licenseId        String    @map("license_id") @db.Uuid
+  licenseNumber    String?   @map("license_number") @db.VarChar(50)
+  issuedDate       DateTime? @map("issued_date") @db.Date
+  expiryDate       DateTime? @map("expiry_date") @db.Date
+  issuingAuthority String?   @map("issuing_authority") @db.VarChar(200)
+  documentUrl      String?   @map("document_url") @db.VarChar(500)
+  isVerified       Boolean   @default(false) @map("is_verified")
+  isDeleted        Boolean   @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  license LicenseMaster @relation(fields: [licenseId], references: [id])
+
+  @@unique([userId, licenseId])
+  @@map("user_licenses")
+}
+
+// ##########################################################################
+// B. 人材管理 (4テーブル)
+// ##########################################################################
+
+/// B-01 職人プロフィール
+model WorkerProfile {
+  id     String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  experienceYears Int?    @map("experience_years")
+  skillLevel      String? @map("skill_level") @db.VarChar(20)
+  specialties     String? @db.Text
+  careerSummary   String? @map("career_summary") @db.Text
+
+  preferredArea  String?  @map("preferred_area") @db.VarChar(300)
+  maxCommuteKm   Int      @default(50) @map("max_commute_km")
+  hasVehicle     Boolean  @default(false) @map("has_vehicle")
+  hasOwnTools    Boolean  @default(false) @map("has_own_tools")
+  canDriveTruck  Boolean  @default(false) @map("can_drive_truck")
+  availableHours String?  @map("available_hours") @db.VarChar(50)
+
+  desiredDailyMin Int? @map("desired_daily_min")
+  desiredDailyMax Int? @map("desired_daily_max")
+  desiredMonthly  Int? @map("desired_monthly")
+
+  totalProjects  Int     @default(0) @map("total_projects")
+  totalWorkDays  Int     @default(0) @map("total_work_days")
+  avgRating      Decimal @default(0.0) @map("avg_rating") @db.Decimal(2, 1)
+  attendanceRate Decimal @default(100.0) @map("attendance_rate") @db.Decimal(4, 1)
+  repeatRate     Decimal @default(0.0) @map("repeat_rate") @db.Decimal(4, 1)
+  cancelCount    Int     @default(0) @map("cancel_count")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("worker_profiles")
+}
+
+/// B-02 工種マスタ — 大分類→小分類の2階層
+model WorkTypeMaster {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parentId     String?  @map("parent_id") @db.Uuid
+  workTypeName String   @map("work_type_name") @db.VarChar(100)
+  category     String?  @db.VarChar(50)
+  level        Int      @default(1)
+  sortOrder    Int      @default(0) @map("sort_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  parent              WorkTypeMaster?     @relation("WorkTypeHierarchy", fields: [parentId], references: [id])
+  children            WorkTypeMaster[]    @relation("WorkTypeHierarchy")
+  workerSkills        WorkerSkill[]
+  projectPhases       ProjectPhase[]
+  projectStaffing     ProjectStaffing[]
+  projectAssignments  ProjectAssignment[]
+  demandPostings      DemandPosting[]     @relation("DemandWorkType")
+  demandPostingsSub   DemandPosting[]     @relation("DemandWorkTypeSub")
+  supplyPostings      SupplyPosting[]     @relation("SupplyWorkType")
+  supplyPostingsSub   SupplyPosting[]     @relation("SupplyWorkTypeSub")
+  projects            Project[]
+
+  @@map("work_type_master")
+}
+
+/// B-03 対応可能工種 — 職人×工種 N:M
+model WorkerSkill {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  workTypeId      String   @map("work_type_id") @db.Uuid
+  proficiency     String   @default("capable") @db.VarChar(20)
+  yearsExperience Int?     @map("years_experience")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workType WorkTypeMaster @relation(fields: [workTypeId], references: [id])
+
+  @@unique([userId, workTypeId])
+  @@map("worker_skills")
+}
+
+/// B-04 現場評価 — 5軸
+model WorkerEvaluation {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workerId             String   @map("worker_id") @db.Uuid
+  evaluatorId          String   @map("evaluator_id") @db.Uuid
+  projectId            String   @map("project_id") @db.Uuid
+  evaluationDate       DateTime @map("evaluation_date") @db.Date
+  ratingSkill          Int?     @map("rating_skill")
+  ratingSpeed          Int?     @map("rating_speed")
+  ratingAttitude       Int?     @map("rating_attitude")
+  ratingSafety         Int?     @map("rating_safety")
+  ratingCommunication  Int?     @map("rating_communication")
+  ratingOverall        Decimal? @map("rating_overall") @db.Decimal(2, 1)
+  comment              String?  @db.Text
+  isPublic             Boolean  @default(false) @map("is_public")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  worker    User    @relation("EvaluationWorker", fields: [workerId], references: [id])
+  evaluator User    @relation("EvaluationEvaluator", fields: [evaluatorId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id])
+
+  @@map("worker_evaluations")
+}
+
+/// B-05 稼働カレンダー — 日別空き状況
+model WorkerAvailability {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  targetDate DateTime @map("target_date") @db.Date
+  status     String   @default("available") @db.VarChar(20)
+  projectId  String?  @map("project_id") @db.Uuid
+  notes      String?  @db.VarChar(200)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+
+  @@unique([userId, targetDate])
+  @@index([targetDate, status])
+  @@map("worker_availability")
+}
+
+// ##########################################################################
+// C. 案件管理 (5テーブル)
+// ##########################################################################
+
+/// 構造マスタ
+model StructureMaster {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  structureName String   @map("structure_name") @db.VarChar(50)
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  projects       Project[]
+  demandPostings DemandPosting[]
+
+  @@map("structure_master")
+}
+
+/// C-01 案件マスタ
+model Project {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId   String  @map("company_id") @db.Uuid
+  projectCode String? @unique @map("project_code") @db.VarChar(50)
+
+  projectName String  @map("project_name") @db.VarChar(300)
+  description String? @db.Text
+
+  clientCompanyId   String? @map("client_company_id") @db.Uuid
+  primeContractorId String? @map("prime_contractor_id") @db.Uuid
+  contractTier      Int     @default(1) @map("contract_tier")
+
+  primaryWorkTypeId String? @map("primary_work_type_id") @db.Uuid
+
+  structureId  String? @map("structure_id") @db.Uuid
+  floorCount   Int?    @map("floor_count")
+  propertyType String? @map("property_type") @db.VarChar(50)
+
+  siteName       String?  @map("site_name") @db.VarChar(200)
+  sitePostalCode String?  @map("site_postal_code") @db.VarChar(8)
+  sitePrefecture String?  @map("site_prefecture") @db.VarChar(10)
+  siteCity       String?  @map("site_city") @db.VarChar(50)
+  siteAddress    String?  @map("site_address") @db.VarChar(300)
+  siteLat        Decimal? @map("site_lat") @db.Decimal(10, 7)
+  siteLng        Decimal? @map("site_lng") @db.Decimal(10, 7)
+  geofenceRadiusM Int     @default(300) @map("geofence_radius_m")
+
+  scheduledStart DateTime? @map("scheduled_start") @db.Date
+  scheduledEnd   DateTime? @map("scheduled_end") @db.Date
+  actualStart    DateTime? @map("actual_start") @db.Date
+  actualEnd      DateTime? @map("actual_end") @db.Date
+
+  contractAmount BigInt?  @map("contract_amount")
+  estimatedCost  BigInt?  @map("estimated_cost")
+  taxRate        Decimal  @default(10.00) @map("tax_rate") @db.Decimal(4, 2)
+
+  safetyDocSystem String?  @map("safety_doc_system") @db.VarChar(100)
+  ccusRequired    Boolean  @default(false) @map("ccus_required")
+
+  salesPersonId  String? @map("sales_person_id") @db.Uuid
+  siteManagerId  String? @map("site_manager_id") @db.Uuid
+  foremanId      String? @map("foreman_id") @db.Uuid
+
+  status String @default("planning") @db.VarChar(20)
+
+  notes     String?   @db.Text
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  deletedBy String?   @map("deleted_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company            Company              @relation("CompanyProjects", fields: [companyId], references: [id])
+  clientCompany      Company?             @relation("ClientProjects", fields: [clientCompanyId], references: [id])
+  primeContractor    Company?             @relation("PrimeProjects", fields: [primeContractorId], references: [id])
+  primaryWorkType    WorkTypeMaster?      @relation(fields: [primaryWorkTypeId], references: [id])
+  structure          StructureMaster?     @relation(fields: [structureId], references: [id])
+  salesPerson        User?                @relation("SalesPerson", fields: [salesPersonId], references: [id])
+  siteManager        User?                @relation("SiteManager", fields: [siteManagerId], references: [id])
+  foreman            User?                @relation("Foreman", fields: [foremanId], references: [id])
+  phases             ProjectPhase[]
+  staffing           ProjectStaffing[]
+  assignments        ProjectAssignment[]
+  documents          ProjectDocument[]
+  dailyReports       DailyReport[]
+  safetyRecords      SafetyRecord[]
+  demandPostings     DemandPosting[]
+  invoices           Invoice[]
+  costLedgerEntries  CostLedger[]
+  workerEvaluations  WorkerEvaluation[]
+  workerAvailability WorkerAvailability[]
+  locationLogs       LocationLog[]
+  geofenceEvents     GeofenceEvent[]
+  supplyInquiries    SupplyInquiry[]
+  matchContracts     MatchContract[]
+  payrollLines       PayrollLine[]
+
+  @@index([status])
+  @@index([scheduledStart, scheduledEnd])
+  @@map("projects")
+}
+
+/// C-02 工程（フェーズ）
+model ProjectPhase {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String    @map("project_id") @db.Uuid
+  phaseName      String    @map("phase_name") @db.VarChar(200)
+  workTypeId     String?   @map("work_type_id") @db.Uuid
+  sortOrder      Int       @default(0) @map("sort_order")
+  scheduledStart DateTime? @map("scheduled_start") @db.Date
+  scheduledEnd   DateTime? @map("scheduled_end") @db.Date
+  actualStart    DateTime? @map("actual_start") @db.Date
+  actualEnd      DateTime? @map("actual_end") @db.Date
+  progressPct    Decimal   @default(0.00) @map("progress_pct") @db.Decimal(5, 2)
+  notes          String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workType     WorkTypeMaster? @relation(fields: [workTypeId], references: [id])
+  invoiceLines InvoiceLine[]
+
+  @@map("project_phases")
+}
+
+/// C-03 人員計画（工種×日）
+model ProjectStaffing {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String   @map("project_id") @db.Uuid
+  workTypeId     String?  @map("work_type_id") @db.Uuid
+  targetDate     DateTime @map("target_date") @db.Date
+  requiredCount  Int      @default(1) @map("required_count")
+  confirmedCount Int      @default(0) @map("confirmed_count")
+  notes          String?  @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workType WorkTypeMaster? @relation(fields: [workTypeId], references: [id])
+
+  @@unique([projectId, workTypeId, targetDate])
+  @@map("project_staffing")
+}
+
+/// C-04 配置確定
+model ProjectAssignment {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId       String    @map("project_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  targetDate      DateTime  @map("target_date") @db.Date
+  workTypeId      String?   @map("work_type_id") @db.Uuid
+  contractType    String    @map("contract_type") @db.VarChar(20)
+  dailyRate       Int?      @map("daily_rate")
+  hourlyRate      Int?      @map("hourly_rate")
+  source          String    @default("direct") @db.VarChar(20)
+  demandPostingId String?   @map("demand_posting_id") @db.Uuid
+  supplyPostingId String?   @map("supply_posting_id") @db.Uuid
+  contractId      String?   @map("contract_id") @db.Uuid
+  status          String    @default("confirmed") @db.VarChar(20)
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz()
+  cancelReason    String?   @map("cancel_reason") @db.VarChar(200)
+  isDeleted       Boolean   @default(false) @map("is_deleted")
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  project       Project        @relation(fields: [projectId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  workType      WorkTypeMaster? @relation(fields: [workTypeId], references: [id])
+  demandPosting DemandPosting? @relation(fields: [demandPostingId], references: [id])
+  supplyPosting SupplyPosting? @relation(fields: [supplyPostingId], references: [id])
+  contract      MatchContract? @relation(fields: [contractId], references: [id])
+  dailyReports  DailyReport[]
+  payrollLines  PayrollLine[]
+
+  @@unique([userId, targetDate])
+  @@map("project_assignments")
+}
+
+/// C-05 案件書類
+model ProjectDocument {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId     String    @map("project_id") @db.Uuid
+  docType       String?   @map("doc_type") @db.VarChar(30)
+  docName       String    @map("doc_name") @db.VarChar(300)
+  fileUrl       String    @map("file_url") @db.VarChar(500)
+  fileSizeBytes BigInt?   @map("file_size_bytes")
+  uploadedBy    String?   @map("uploaded_by") @db.Uuid
+  isDeleted     Boolean   @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader User?   @relation(fields: [uploadedBy], references: [id])
+
+  @@map("project_documents")
+}
+
+// ##########################################################################
+// D. 日報・勤怠 (5テーブル)
+// ##########################################################################
+
+/// D-01 日報
+model DailyReport {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId    String    @map("company_id") @db.Uuid
+  projectId    String    @map("project_id") @db.Uuid
+  assignmentId String?   @map("assignment_id") @db.Uuid
+  workerId     String    @map("worker_id") @db.Uuid
+  reportDate   DateTime  @map("report_date") @db.Date
+  inputMode    String    @map("input_mode") @db.VarChar(20)
+
+  clockIn         DateTime? @map("clock_in") @db.Timestamptz()
+  clockOut        DateTime? @map("clock_out") @db.Timestamptz()
+  breakMinutes    Int       @default(0) @map("break_minutes")
+  workMinutes     Int?      @map("work_minutes")
+  manDays         Decimal?  @map("man_days") @db.Decimal(4, 2)
+  overtimeMinutes Int       @default(0) @map("overtime_minutes")
+
+  clockInLat  Decimal? @map("clock_in_lat") @db.Decimal(10, 7)
+  clockInLng  Decimal? @map("clock_in_lng") @db.Decimal(10, 7)
+  clockOutLat Decimal? @map("clock_out_lat") @db.Decimal(10, 7)
+  clockOutLng Decimal? @map("clock_out_lng") @db.Decimal(10, 7)
+
+  workContent String?  @map("work_content") @db.Text
+  progressPct Decimal? @map("progress_pct") @db.Decimal(5, 2)
+  weather     String?  @db.VarChar(20)
+  temperature Decimal? @db.Decimal(3, 1)
+
+  status          String    @default("draft") @db.VarChar(20)
+  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz()
+  approvedBy      String?   @map("approved_by") @db.Uuid
+  approvedAt      DateTime? @map("approved_at") @db.Timestamptz()
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  notes           String?   @db.Text
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company       Company            @relation(fields: [companyId], references: [id])
+  project       Project            @relation(fields: [projectId], references: [id])
+  assignment    ProjectAssignment? @relation(fields: [assignmentId], references: [id])
+  worker        User               @relation("ReportWorker", fields: [workerId], references: [id])
+  approver      User?              @relation("ReportApprover", fields: [approvedBy], references: [id])
+  costItems     ReportCostItem[]
+  photos        ReportPhoto[]
+  safetyRecords SafetyRecord[]
+  breakLogs     BreakLog[]
+  locationLogs  LocationLog[]
+
+  @@unique([workerId, reportDate, projectId])
+  @@index([reportDate])
+  @@map("daily_reports")
+}
+
+/// D-02 日報原価明細
+model ReportCostItem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId  String   @map("report_id") @db.Uuid
+  costType  String   @map("cost_type") @db.VarChar(20)
+  itemName  String   @map("item_name") @db.VarChar(200)
+  quantity  Decimal? @db.Decimal(10, 2)
+  unit      String?  @db.VarChar(20)
+  unitPrice Decimal? @map("unit_price") @db.Decimal(12, 2)
+  amount    Decimal? @db.Decimal(12, 2)
+  notes     String?  @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  report DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("report_cost_items")
+}
+
+/// D-03 日報写真
+model ReportPhoto {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId  String    @map("report_id") @db.Uuid
+  photoUrl  String    @map("photo_url") @db.VarChar(500)
+  photoType String?   @map("photo_type") @db.VarChar(20)
+  caption   String?   @db.VarChar(200)
+  takenAt   DateTime? @map("taken_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  report DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("report_photos")
+}
+
+/// D-04 安全KY記録
+model SafetyRecord {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId         String?   @map("report_id") @db.Uuid
+  projectId        String    @map("project_id") @db.Uuid
+  recordedBy       String    @map("recorded_by") @db.Uuid
+  recordDate       DateTime  @map("record_date") @db.Date
+  hazardIdentified String    @map("hazard_identified") @db.Text
+  countermeasure   String    @db.Text
+  safetyOfficer    String?   @map("safety_officer") @db.VarChar(100)
+  participants     String[]  @db.Uuid
+  participantCount Int?      @map("participant_count")
+  isConfirmed      Boolean   @default(false) @map("is_confirmed")
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz()
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  report   DailyReport? @relation(fields: [reportId], references: [id])
+  project  Project      @relation(fields: [projectId], references: [id])
+  recorder User         @relation(fields: [recordedBy], references: [id])
+
+  @@map("safety_records")
+}
+
+/// D-05 休憩ログ
+model BreakLog {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId     String    @map("report_id") @db.Uuid
+  breakStart   DateTime  @map("break_start") @db.Timestamptz()
+  breakEnd     DateTime? @map("break_end") @db.Timestamptz()
+  breakMinutes Int?      @map("break_minutes")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  report DailyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@map("break_logs")
+}
+
+// ##########################################################################
+// E. 位置情報 (2テーブル)
+// ##########################################################################
+
+/// E-01 位置情報ログ
+model LocationLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  eventType  String   @map("event_type") @db.VarChar(20)
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz()
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  accuracyM  Decimal? @map("accuracy_m") @db.Decimal(6, 1)
+  projectId  String?  @map("project_id") @db.Uuid
+  reportId   String?  @map("report_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user    User         @relation(fields: [userId], references: [id])
+  project Project?     @relation(fields: [projectId], references: [id])
+  report  DailyReport? @relation(fields: [reportId], references: [id])
+
+  @@index([userId, recordedAt])
+  @@map("location_logs")
+}
+
+/// E-02 ジオフェンスイベント
+model GeofenceEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  eventType String   @map("event_type") @db.VarChar(10)
+  eventAt   DateTime @map("event_at") @db.Timestamptz()
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+  accuracyM Decimal? @map("accuracy_m") @db.Decimal(6, 1)
+  distanceM Decimal? @map("distance_m") @db.Decimal(8, 1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, eventAt])
+  @@map("geofence_events")
+}
+
+// ##########################################################################
+// F. マッチング — 募集 Demand (3テーブル)
+// ##########################################################################
+
+/// F-01 募集票（Demand）
+model DemandPosting {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId String  @map("company_id") @db.Uuid
+  projectId String? @map("project_id") @db.Uuid
+  postedBy  String  @map("posted_by") @db.Uuid
+
+  siteName       String   @map("site_name") @db.VarChar(300)
+  sitePrefecture String   @map("site_prefecture") @db.VarChar(10)
+  siteCity       String   @map("site_city") @db.VarChar(50)
+  siteAddress    String?  @map("site_address") @db.VarChar(300)
+  siteLat        Decimal? @map("site_lat") @db.Decimal(10, 7)
+  siteLng        Decimal? @map("site_lng") @db.Decimal(10, 7)
+
+  contractType  String  @map("contract_type") @db.VarChar(20)
+  workTypeId    String  @map("work_type_id") @db.Uuid
+  workTypeSubId String? @map("work_type_sub_id") @db.Uuid
+
+  workDateStart DateTime @map("work_date_start") @db.Date
+  workDateEnd   DateTime @map("work_date_end") @db.Date
+  requiredCount Int      @default(1) @map("required_count")
+
+  dailyRateMin Int?    @map("daily_rate_min")
+  dailyRateMax Int?    @map("daily_rate_max")
+  fixedPrice   BigInt? @map("fixed_price")
+  fixedScope   String? @map("fixed_scope") @db.Text
+
+  status String @default("draft") @db.VarChar(20)
+
+  structureId        String?   @map("structure_id") @db.Uuid
+  floorCount         Int?      @map("floor_count")
+  primeContractor    String?   @map("prime_contractor") @db.VarChar(200)
+  contractTier       Int?      @map("contract_tier")
+  workTimeStart      DateTime? @map("work_time_start") @db.Time()
+  workTimeEnd        DateTime? @map("work_time_end") @db.Time()
+  transportationType String?   @map("transportation_type") @db.VarChar(20)
+  transportationNote String?   @map("transportation_note") @db.VarChar(200)
+  safetyDocSystem    String?   @map("safety_doc_system") @db.VarChar(100)
+  ccusRequired       Boolean   @default(false) @map("ccus_required")
+  requiredSkillLevel String?   @map("required_skill_level") @db.VarChar(20)
+  requiredLicenses   String[]  @map("required_licenses") @db.Uuid
+  providesParking    Boolean   @default(false) @map("provides_parking")
+  providesTools      Boolean   @default(false) @map("provides_tools")
+  providesMeals      Boolean   @default(false) @map("provides_meals")
+  description        String?   @db.Text
+  notes              String?   @db.Text
+
+  confirmedCount   Int       @default(0) @map("confirmed_count")
+  publishedAt      DateTime? @map("published_at") @db.Timestamptz()
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz()
+  viewCount        Int       @default(0) @map("view_count")
+  applicationCount Int       @default(0) @map("application_count")
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  deletedBy String?   @map("deleted_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company        Company          @relation(fields: [companyId], references: [id])
+  project        Project?         @relation(fields: [projectId], references: [id])
+  poster         User             @relation(fields: [postedBy], references: [id])
+  workType       WorkTypeMaster   @relation("DemandWorkType", fields: [workTypeId], references: [id])
+  workTypeSub    WorkTypeMaster?  @relation("DemandWorkTypeSub", fields: [workTypeSubId], references: [id])
+  structure      StructureMaster? @relation(fields: [structureId], references: [id])
+  applications   DemandApplication[]
+  messages       DemandMessage[]
+  assignments    ProjectAssignment[]
+  matchContracts MatchContract[]  @relation("DemandContract")
+  cancelLogs     MatchCancelLog[] @relation("DemandCancel")
+
+  @@index([status, workDateStart])
+  @@index([sitePrefecture, siteCity])
+  @@index([contractType, workTypeId])
+  @@map("demand_postings")
+}
+
+/// F-02 募集への応答
+model DemandApplication {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  postingId          String    @map("posting_id") @db.Uuid
+  applicantId        String    @map("applicant_id") @db.Uuid
+  applicantCompanyId String?   @map("applicant_company_id") @db.Uuid
+  applicantType      String    @map("applicant_type") @db.VarChar(20)
+
+  proposedRate   Int?       @map("proposed_rate")
+  proposedPrice  BigInt?    @map("proposed_price")
+  availableCount Int        @default(1) @map("available_count")
+  availableDates DateTime[] @map("available_dates") @db.Date
+  message        String?    @db.Text
+
+  status          String    @default("pending") @db.VarChar(20)
+  respondedAt     DateTime? @map("responded_at") @db.Timestamptz()
+  respondedBy     String?   @map("responded_by") @db.Uuid
+  rejectionReason String?   @map("rejection_reason") @db.VarChar(300)
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  posting        DemandPosting   @relation(fields: [postingId], references: [id])
+  applicant      User            @relation("ApplicationApplicant", fields: [applicantId], references: [id])
+  responder      User?           @relation("ApplicationResponder", fields: [respondedBy], references: [id])
+  messages       DemandMessage[]
+  matchContracts MatchContract[] @relation("DemandAppContract")
+
+  @@index([postingId, status])
+  @@map("demand_applications")
+}
+
+/// F-03 募集メッセージ
+model DemandMessage {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  postingId     String   @map("posting_id") @db.Uuid
+  applicationId String?  @map("application_id") @db.Uuid
+  senderId      String   @map("sender_id") @db.Uuid
+  messageText   String   @map("message_text") @db.Text
+  isRead        Boolean  @default(false) @map("is_read")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  posting     DemandPosting      @relation(fields: [postingId], references: [id])
+  application DemandApplication? @relation(fields: [applicationId], references: [id])
+  sender      User               @relation(fields: [senderId], references: [id])
+
+  @@map("demand_messages")
+}
+
+// ##########################################################################
+// G. マッチング — 人材公開 Supply (3テーブル)
+// ##########################################################################
+
+/// G-01 人材公開票（Supply）
+model SupplyPosting {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId     String?  @map("company_id") @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  isSelfPosting Boolean  @default(true) @map("is_self_posting")
+
+  workTypeId         String  @map("work_type_id") @db.Uuid
+  workTypeSubId      String? @map("work_type_sub_id") @db.Uuid
+  contractType       String  @map("contract_type") @db.VarChar(20)
+  desiredDailyRate   Int?    @map("desired_daily_rate")
+  desiredMonthlyRate Int?    @map("desired_monthly_rate")
+
+  availableStart      DateTime @map("available_start") @db.Date
+  availableEnd        DateTime @map("available_end") @db.Date
+  availableHours      String?  @map("available_hours") @db.VarChar(50)
+  availablePrefecture String   @map("available_prefecture") @db.VarChar(10)
+  availableArea       String?  @map("available_area") @db.VarChar(200)
+
+  status String @default("draft") @db.VarChar(20)
+
+  skillLevel         String?  @map("skill_level") @db.VarChar(20)
+  experienceYears    Int?     @map("experience_years")
+  licenses           String[] @db.Uuid
+  portfolioText      String?  @map("portfolio_text") @db.Text
+  ccusWorkerId       String?  @map("ccus_worker_id") @db.VarChar(30)
+  hasVehicle         Boolean? @map("has_vehicle")
+  hasOwnTools        Boolean? @map("has_own_tools")
+  transportationType String?  @map("transportation_type") @db.VarChar(20)
+
+  title       String? @db.VarChar(300)
+  description String? @db.Text
+  notes       String? @db.Text
+
+  publishedAt  DateTime? @map("published_at") @db.Timestamptz()
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz()
+  viewCount    Int       @default(0) @map("view_count")
+  inquiryCount Int       @default(0) @map("inquiry_count")
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  deletedBy String?   @map("deleted_by") @db.Uuid
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company        Company?          @relation(fields: [companyId], references: [id])
+  user           User              @relation(fields: [userId], references: [id])
+  workType       WorkTypeMaster    @relation("SupplyWorkType", fields: [workTypeId], references: [id])
+  workTypeSub    WorkTypeMaster?   @relation("SupplyWorkTypeSub", fields: [workTypeSubId], references: [id])
+  inquiries      SupplyInquiry[]
+  messages       SupplyMessage[]
+  assignments    ProjectAssignment[]
+  matchContracts MatchContract[]  @relation("SupplyContract")
+  cancelLogs     MatchCancelLog[] @relation("SupplyCancel")
+
+  @@index([status, availableStart])
+  @@index([availablePrefecture])
+  @@map("supply_postings")
+}
+
+/// G-02 人材への問合せ
+model SupplyInquiry {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplyPostingId   String    @map("supply_posting_id") @db.Uuid
+  inquirerId        String    @map("inquirer_id") @db.Uuid
+  inquirerCompanyId String?   @map("inquirer_company_id") @db.Uuid
+  projectId         String?   @map("project_id") @db.Uuid
+  proposedRate      Int?      @map("proposed_rate")
+  proposedPeriod    String?   @map("proposed_period") @db.VarChar(100)
+  message           String?   @db.Text
+
+  status      String    @default("pending") @db.VarChar(20)
+  respondedAt DateTime? @map("responded_at") @db.Timestamptz()
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  supplyPosting  SupplyPosting   @relation(fields: [supplyPostingId], references: [id])
+  inquirer       User            @relation(fields: [inquirerId], references: [id])
+  project        Project?        @relation(fields: [projectId], references: [id])
+  messages       SupplyMessage[]
+  matchContracts MatchContract[] @relation("SupplyInquiryContract")
+
+  @@map("supply_inquiries")
+}
+
+/// G-03 人材公開メッセージ
+model SupplyMessage {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplyPostingId String   @map("supply_posting_id") @db.Uuid
+  inquiryId       String?  @map("inquiry_id") @db.Uuid
+  senderId        String   @map("sender_id") @db.Uuid
+  messageText     String   @map("message_text") @db.Text
+  isRead          Boolean  @default(false) @map("is_read")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  supplyPosting SupplyPosting  @relation(fields: [supplyPostingId], references: [id])
+  inquiry       SupplyInquiry? @relation(fields: [inquiryId], references: [id])
+  sender        User           @relation(fields: [senderId], references: [id])
+
+  @@map("supply_messages")
+}
+
+// ##########################################################################
+// H. マッチング共通 (3テーブル)
+// ##########################################################################
+
+/// H-01 成約
+model MatchContract {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  demandPostingId String? @map("demand_posting_id") @db.Uuid
+  demandAppId     String? @map("demand_app_id") @db.Uuid
+  supplyPostingId String? @map("supply_posting_id") @db.Uuid
+  supplyInquiryId String? @map("supply_inquiry_id") @db.Uuid
+
+  clientCompanyId String  @map("client_company_id") @db.Uuid
+  workerUserId    String  @map("worker_user_id") @db.Uuid
+  workerCompanyId String? @map("worker_company_id") @db.Uuid
+  projectId       String? @map("project_id") @db.Uuid
+
+  contractType     String   @map("contract_type") @db.VarChar(20)
+  agreedDailyRate  Int?     @map("agreed_daily_rate")
+  agreedFixedPrice BigInt?  @map("agreed_fixed_price")
+  workDateStart    DateTime @map("work_date_start") @db.Date
+  workDateEnd      DateTime @map("work_date_end") @db.Date
+  agreedCount      Int      @default(1) @map("agreed_count")
+
+  status           String    @default("active") @db.VarChar(20)
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz()
+  cancelledAt      DateTime? @map("cancelled_at") @db.Timestamptz()
+  cancelReason     String?   @map("cancel_reason") @db.VarChar(300)
+
+  matchedAt        DateTime  @default(now()) @map("matched_at") @db.Timestamptz()
+  timeToMatchHours Decimal?  @map("time_to_match_hours") @db.Decimal(8, 1)
+
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  demandPosting DemandPosting?     @relation("DemandContract", fields: [demandPostingId], references: [id])
+  demandApp     DemandApplication? @relation("DemandAppContract", fields: [demandAppId], references: [id])
+  supplyPosting SupplyPosting?     @relation("SupplyContract", fields: [supplyPostingId], references: [id])
+  supplyInquiry SupplyInquiry?     @relation("SupplyInquiryContract", fields: [supplyInquiryId], references: [id])
+  clientCompany Company            @relation("ClientContract", fields: [clientCompanyId], references: [id])
+  workerUser    User               @relation(fields: [workerUserId], references: [id])
+  workerCompany Company?           @relation("WorkerCompanyContract", fields: [workerCompanyId], references: [id])
+  project       Project?           @relation(fields: [projectId], references: [id])
+  reviews       MatchReview[]
+  cancelLogs    MatchCancelLog[]
+  assignments   ProjectAssignment[]
+
+  @@map("match_contracts")
+}
+
+/// H-02 双方向レビュー
+model MatchReview {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId String   @map("contract_id") @db.Uuid
+  reviewerId String   @map("reviewer_id") @db.Uuid
+  revieweeId String   @map("reviewee_id") @db.Uuid
+  reviewType String   @map("review_type") @db.VarChar(20)
+  rating     Int?
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  contract MatchContract @relation(fields: [contractId], references: [id])
+  reviewer User          @relation("ReviewReviewer", fields: [reviewerId], references: [id])
+  reviewee User          @relation("ReviewReviewee", fields: [revieweeId], references: [id])
+
+  @@map("match_reviews")
+}
+
+/// H-03 キャンセルログ
+model MatchCancelLog {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId      String?  @map("contract_id") @db.Uuid
+  demandPostingId String?  @map("demand_posting_id") @db.Uuid
+  supplyPostingId String?  @map("supply_posting_id") @db.Uuid
+  cancelledBy     String   @map("cancelled_by") @db.Uuid
+  cancelReason    String?  @map("cancel_reason") @db.VarChar(300)
+  cancelType      String?  @map("cancel_type") @db.VarChar(20)
+  penaltyAmount   Int      @default(0) @map("penalty_amount")
+  cancelledAt     DateTime @default(now()) @map("cancelled_at") @db.Timestamptz()
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  contract        MatchContract? @relation(fields: [contractId], references: [id])
+  demandPosting   DemandPosting? @relation("DemandCancel", fields: [demandPostingId], references: [id])
+  supplyPosting   SupplyPosting? @relation("SupplyCancel", fields: [supplyPostingId], references: [id])
+  cancelledByUser User           @relation(fields: [cancelledBy], references: [id])
+
+  @@map("match_cancel_logs")
+}
+
+// ##########################################################################
+// I. カスタムフィールド (2テーブル)
+// ##########################################################################
+
+/// I-01 カスタム項目定義
+model CustomFieldDef {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId   String   @map("company_id") @db.Uuid
+  targetType  String   @map("target_type") @db.VarChar(20)
+  fieldLabel  String   @map("field_label") @db.VarChar(100)
+  fieldKey    String   @map("field_key") @db.VarChar(50)
+  inputType   String   @map("input_type") @db.VarChar(20)
+  options     Json?    @db.JsonB
+  isRequired  Boolean  @default(false) @map("is_required")
+  isVisible   Boolean  @default(true) @map("is_visible")
+  sortOrder   Int      @default(0) @map("sort_order")
+  placeholder String?  @db.VarChar(200)
+  helpText    String?  @map("help_text") @db.VarChar(300)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company Company          @relation(fields: [companyId], references: [id])
+  values  CustomFieldVal[]
+
+  @@unique([companyId, targetType, fieldKey])
+  @@map("custom_field_defs")
+}
+
+/// I-02 カスタム項目値
+model CustomFieldVal {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fieldDefId String   @map("field_def_id") @db.Uuid
+  targetType String   @map("target_type") @db.VarChar(20)
+  targetId   String   @map("target_id") @db.Uuid
+  fieldValue String?  @map("field_value") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  fieldDef CustomFieldDef @relation(fields: [fieldDefId], references: [id])
+
+  @@unique([fieldDefId, targetId])
+  @@index([targetType, targetId])
+  @@index([fieldDefId])
+  @@map("custom_field_vals")
+}
+
+// ##########################################################################
+// J. 会計・請求 (6テーブル)
+// ##########################################################################
+
+/// 勘定科目マスタ
+model AccountMaster {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountCode     String   @unique @map("account_code") @db.VarChar(10)
+  accountName     String   @map("account_name") @db.VarChar(100)
+  accountType     String?  @map("account_type") @db.VarChar(30)
+  parentCode      String?  @map("parent_code") @db.VarChar(10)
+  isConstruction  Boolean  @default(true) @map("is_construction")
+  sortOrder       Int      @default(0) @map("sort_order")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  invoiceLines      InvoiceLine[]
+  costLedgerEntries CostLedger[]
+
+  @@map("account_master")
+}
+
+/// J-01 請求書
+model Invoice {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId        String    @map("company_id") @db.Uuid
+  clientCompanyId  String    @map("client_company_id") @db.Uuid
+  projectId        String?   @map("project_id") @db.Uuid
+  invoiceNumber    String    @unique @map("invoice_number") @db.VarChar(50)
+  invoiceDate      DateTime  @map("invoice_date") @db.Date
+  dueDate          DateTime  @map("due_date") @db.Date
+  billingType      String?   @map("billing_type") @db.VarChar(20)
+  subtotal         BigInt
+  taxAmount        BigInt    @map("tax_amount")
+  totalAmount      BigInt    @map("total_amount")
+  taxRate          Decimal   @default(10.00) @map("tax_rate") @db.Decimal(4, 2)
+  qualifiedInvoice Boolean   @default(true) @map("qualified_invoice")
+  invoiceRegNo     String?   @map("invoice_reg_no") @db.VarChar(20)
+  status           String    @default("draft") @db.VarChar(20)
+  issuedAt         DateTime? @map("issued_at") @db.Timestamptz()
+  sentAt           DateTime? @map("sent_at") @db.Timestamptz()
+  paidAt           DateTime? @map("paid_at") @db.Timestamptz()
+  pdfUrl           String?   @map("pdf_url") @db.VarChar(500)
+  notes            String?   @db.Text
+  isDeleted        Boolean   @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company       Company           @relation("InvoiceIssuer", fields: [companyId], references: [id])
+  clientCompany Company           @relation("InvoiceClient", fields: [clientCompanyId], references: [id])
+  project       Project?          @relation(fields: [projectId], references: [id])
+  lines         InvoiceLine[]
+  payments      PaymentReceived[]
+
+  @@map("invoices")
+}
+
+/// J-02 請求明細
+model InvoiceLine {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId      String   @map("invoice_id") @db.Uuid
+  lineOrder      Int      @default(0) @map("line_order")
+  description    String   @db.VarChar(300)
+  quantity       Decimal? @db.Decimal(10, 2)
+  unit           String?  @db.VarChar(20)
+  unitPrice      Decimal? @map("unit_price") @db.Decimal(12, 2)
+  amount         BigInt
+  taxCategory    String   @default("taxable") @map("tax_category") @db.VarChar(10)
+  accountId      String?  @map("account_id") @db.Uuid
+  projectPhaseId String?  @map("project_phase_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  invoice      Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  account      AccountMaster? @relation(fields: [accountId], references: [id])
+  projectPhase ProjectPhase?  @relation(fields: [projectPhaseId], references: [id])
+
+  @@map("invoice_lines")
+}
+
+/// J-03 入金記録
+model PaymentReceived {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId     String   @map("invoice_id") @db.Uuid
+  paymentDate   DateTime @map("payment_date") @db.Date
+  amount        BigInt
+  paymentMethod String?  @map("payment_method") @db.VarChar(20)
+  bankRef       String?  @map("bank_ref") @db.VarChar(100)
+  notes         String?  @db.VarChar(200)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments_received")
+}
+
+/// J-04 職人支払
+model Payroll {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId      String    @map("company_id") @db.Uuid
+  workerId       String    @map("worker_id") @db.Uuid
+  periodStart    DateTime  @map("period_start") @db.Date
+  periodEnd      DateTime  @map("period_end") @db.Date
+  paymentDate    DateTime? @map("payment_date") @db.Date
+  grossAmount    BigInt    @map("gross_amount")
+  withholdingTax BigInt    @default(0) @map("withholding_tax")
+  deductions     BigInt    @default(0)
+  netAmount      BigInt    @map("net_amount")
+  status         String    @default("draft") @db.VarChar(20)
+  paidAt         DateTime? @map("paid_at") @db.Timestamptz()
+  notes          String?   @db.Text
+  isDeleted      Boolean   @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz()
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  company Company      @relation(fields: [companyId], references: [id])
+  worker  User         @relation(fields: [workerId], references: [id])
+  lines   PayrollLine[]
+
+  @@map("payroll")
+}
+
+/// J-05 支払明細
+model PayrollLine {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  payrollId    String    @map("payroll_id") @db.Uuid
+  projectId    String?   @map("project_id") @db.Uuid
+  assignmentId String?   @map("assignment_id") @db.Uuid
+  workDate     DateTime? @map("work_date") @db.Date
+  manDays      Decimal?  @map("man_days") @db.Decimal(4, 2)
+  dailyRate    Int?      @map("daily_rate")
+  amount       BigInt
+  description  String?   @db.VarChar(200)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  payroll    Payroll            @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  project    Project?           @relation(fields: [projectId], references: [id])
+  assignment ProjectAssignment? @relation(fields: [assignmentId], references: [id])
+
+  @@map("payroll_lines")
+}
+
+/// J-06 原価台帳
+model CostLedger {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyId       String   @map("company_id") @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  accountId       String?  @map("account_id") @db.Uuid
+  costCategory    String   @map("cost_category") @db.VarChar(30)
+  transactionDate DateTime @map("transaction_date") @db.Date
+  description     String?  @db.VarChar(300)
+  amount          BigInt
+  sourceType      String?  @map("source_type") @db.VarChar(20)
+  sourceId        String?  @map("source_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  company Company        @relation(fields: [companyId], references: [id])
+  project Project        @relation(fields: [projectId], references: [id])
+  account AccountMaster? @relation(fields: [accountId], references: [id])
+
+  @@index([projectId, costCategory])
+  @@map("cost_ledger")
+}
+
+// ##########################################################################
+// K. 通知ログ (1テーブル)
+// ##########################################################################
+
+/// K-01 通知ログ
+model NotificationLog {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  channel          String    @db.VarChar(20)
+  notificationType String    @map("notification_type") @db.VarChar(50)
+  title            String?   @db.VarChar(200)
+  body             String?   @db.Text
+  relatedType      String?   @map("related_type") @db.VarChar(30)
+  relatedId        String?   @map("related_id") @db.Uuid
+  isRead           Boolean   @default(false) @map("is_read")
+  sentAt           DateTime  @default(now()) @map("sent_at") @db.Timestamptz()
+  readAt           DateTime? @map("read_at") @db.Timestamptz()
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notification_logs")
+}
