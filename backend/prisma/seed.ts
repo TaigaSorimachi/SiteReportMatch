@@ -89,7 +89,13 @@ async function main() {
   const adminHash = await bcrypt.hash('admin123', 12);
   const admin = await prisma.user.upsert({
     where: { id: '00000000-0000-0000-0000-000000000009' },
-    update: {},
+    update: {
+      email: 'admin@demo.com',
+      passwordHash: adminHash,
+      firstName: '運営',
+      lastName: '管理者',
+      role: 'admin',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000009',
       email: 'admin@demo.com',
@@ -105,7 +111,15 @@ async function main() {
   const ownerHash = await bcrypt.hash('owner123', 12);
   const owner = await prisma.user.upsert({
     where: { id: '00000000-0000-0000-0000-000000000010' },
-    update: {},
+    update: {
+      companyId: company.id,
+      lineUserId: 'demo-owner',
+      email: 'owner@demo.com',
+      passwordHash: ownerHash,
+      firstName: '太郎',
+      lastName: '山田',
+      role: 'owner',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000010',
       companyId: company.id,
@@ -122,7 +136,14 @@ async function main() {
   // ── デモユーザー (作業者) ──
   const worker = await prisma.user.upsert({
     where: { id: '00000000-0000-0000-0000-000000000011' },
-    update: {},
+    update: {
+      companyId: company.id,
+      lineUserId: 'demo-worker',
+      email: 'worker@demo.com',
+      firstName: '花子',
+      lastName: '佐藤',
+      role: 'worker',
+    },
     create: {
       id: '00000000-0000-0000-0000-000000000011',
       companyId: company.id,

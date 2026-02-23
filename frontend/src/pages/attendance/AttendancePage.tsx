@@ -177,12 +177,18 @@ function ClockInSection({
   const [loading, setLoading] = useState(true);
   const [clockingIn, setClockingIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reportedProjectIds, setReportedProjectIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await projectsApi.list({ status: 'active' });
-        setProjects(res.data);
+        const today = getTodayString();
+        const [projectsRes, reportsRes] = await Promise.all([
+          projectsApi.list({ status: 'active' }),
+          reportsApi.list({ dateFrom: today, dateTo: today }),
+        ]);
+        setProjects(projectsRes.data);
+        setReportedProjectIds(new Set(reportsRes.data.map((r: any) => r.projectId)));
       } catch (err: any) {
         setError(err.message || '案件の取得に失敗しました');
       } finally {
@@ -191,10 +197,12 @@ function ClockInSection({
     })();
   }, []);
 
-  const projectOptions = projects.map((p) => ({
-    value: p.id,
-    label: p.projectName,
-  }));
+  const projectOptions = projects
+    .filter((p) => !reportedProjectIds.has(p.id))
+    .map((p) => ({
+      value: p.id,
+      label: p.projectName,
+    }));
 
   const handleClockIn = async () => {
     if (!selectedProjectId || clockingIn) return;
@@ -209,8 +217,8 @@ function ClockInSection({
       const report = await reportsApi.clockIn({
         projectId: project.id,
         location: {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
+          lat: coords.latitude,
+          lng: coords.longitude,
           accuracy: coords.accuracy,
         },
       });

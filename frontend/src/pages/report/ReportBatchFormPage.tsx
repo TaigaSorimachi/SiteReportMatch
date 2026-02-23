@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { projectsApi } from '@/lib/api/projects';
+import { reportsApi } from '@/lib/api/reports';
 import type { Project } from '@/types/api';
 
 const WEATHER_OPTIONS = [
@@ -47,6 +48,7 @@ export function ReportBatchFormPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [form, setForm] = useState<FormData>(defaultForm);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -62,6 +64,32 @@ export function ReportBatchFormPage() {
     })();
   }, []);
 
+  // プロジェクトまたは日付が変わったときに重複チェック
+  const checkDuplicate = useCallback(async (projectId: string, reportDate: string) => {
+    if (!projectId || !reportDate) {
+      setDuplicateWarning(null);
+      return;
+    }
+    try {
+      const res = await reportsApi.list({
+        projectId,
+        dateFrom: reportDate,
+        dateTo: reportDate,
+      });
+      if (res.data.length > 0) {
+        setDuplicateWarning('この案件・日付の日報は既に登録されています');
+      } else {
+        setDuplicateWarning(null);
+      }
+    } catch {
+      setDuplicateWarning(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkDuplicate(form.projectId, form.reportDate);
+  }, [form.projectId, form.reportDate, checkDuplicate]);
+
   const updateField = (field: keyof FormData, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -73,6 +101,10 @@ export function ReportBatchFormPage() {
     }
     if (!form.reportDate) {
       alert('報告日を入力してください');
+      return;
+    }
+    if (duplicateWarning) {
+      alert(duplicateWarning);
       return;
     }
     if (!form.clockIn || !form.clockOut) {
@@ -135,6 +167,12 @@ export function ReportBatchFormPage() {
             onChange={(e) => updateField('reportDate', e.target.value)}
           />
 
+          {duplicateWarning && (
+            <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3">
+              <p className="text-sm text-yellow-700">{duplicateWarning}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="出勤時間"
@@ -191,7 +229,9 @@ export function ReportBatchFormPage() {
           />
 
           <div className="pt-2">
-            <Button onClick={handleSubmit}>確認画面へ</Button>
+            <Button onClick={handleSubmit} disabled={!!duplicateWarning}>
+              確認画面へ
+            </Button>
           </div>
         </div>
       </PageContainer>

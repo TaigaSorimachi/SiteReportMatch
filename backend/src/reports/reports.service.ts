@@ -188,6 +188,22 @@ export class ReportsService {
       now.getDate(),
     );
 
+    // 同一作業者・日付・プロジェクトの重複チェック
+    const existing = await this.prisma.dailyReport.findUnique({
+      where: {
+        workerId_reportDate_projectId: {
+          workerId,
+          reportDate,
+          projectId: dto.projectId,
+        },
+      },
+    });
+    if (existing) {
+      throw new ConflictException(
+        '同一作業者・日付・プロジェクトの日報が既に存在します',
+      );
+    }
+
     const report = await this.prisma.dailyReport.create({
       data: {
         companyId: worker.companyId,

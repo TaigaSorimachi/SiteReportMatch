@@ -54,6 +54,12 @@ apiClient.interceptors.response.use(
         isRefreshing = false;
       }
     }
+    // バックエンドのエラーメッセージを抽出してErrorオブジェクトに変換
+    const backendMessage = error.response?.data?.message;
+    if (backendMessage) {
+      const msg = Array.isArray(backendMessage) ? backendMessage.join(', ') : backendMessage;
+      return Promise.reject(new Error(msg));
+    }
     return Promise.reject(error);
   },
 );
