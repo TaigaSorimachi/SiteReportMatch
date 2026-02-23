@@ -16,7 +16,7 @@ services:
       mkdir -p backend/client/frontend backend/client/admin
       cp -r frontend/dist/. backend/client/frontend/
       cp -r admin/dist/. backend/client/admin/
-    startCommand: cd backend && npx prisma migrate deploy && npx prisma db seed && node dist/main
+    startCommand: cd backend && npx prisma migrate deploy && npx prisma db seed && node dist/src/main
     envVars:
       - key: DATABASE_URL
         fromDatabase:

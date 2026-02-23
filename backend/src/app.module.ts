@@ -5,7 +5,6 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { DatabaseModule } from './database/database.module';
 import { CompaniesModule } from './companies/companies.module';
@@ -25,8 +24,9 @@ import { AuthModule } from './auth/auth.module';
 
 // 本番用: ビルド済みフロントエンドの静的配信（client/ディレクトリが存在する場合のみ）
 const staticModules: any[] = [];
-const adminPath = join(__dirname, '..', 'client', 'admin');
-const frontendPath = join(__dirname, '..', 'client', 'frontend');
+// __dirname = dist/src/ なので ../../client/ へ
+const adminPath = join(__dirname, '..', '..', 'client', 'admin');
+const frontendPath = join(__dirname, '..', '..', 'client', 'frontend');
 
 if (existsSync(frontendPath)) {
   staticModules.push(
@@ -66,7 +66,6 @@ if (existsSync(frontendPath)) {
   ],
   controllers: [AppController],
   providers: [
-    AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
