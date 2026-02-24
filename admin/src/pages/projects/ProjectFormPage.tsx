@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import MapLocationPicker from '@/components/ui/MapLocationPicker';
 
 const projectSchema = z.object({
   projectName: z.string().min(1, '案件名は必須です'),
@@ -18,6 +19,9 @@ const projectSchema = z.object({
   description: z.string().optional().default(''),
   status: z.enum(['planning', 'active', 'completed', 'suspended', 'cancelled']),
   siteName: z.string().optional().default(''),
+  sitePostalCode: z.string().optional().default(''),
+  sitePrefecture: z.string().optional().default(''),
+  siteCity: z.string().optional().default(''),
   siteAddress: z.string().optional().default(''),
   scheduledStart: z.string().optional().default(''),
   scheduledEnd: z.string().optional().default(''),
@@ -69,11 +73,15 @@ export default function ProjectFormPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [postalSearching, setPostalSearching] = useState(false);
+  const [mapLocation, setMapLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -83,6 +91,9 @@ export default function ProjectFormPage() {
       description: '',
       status: 'planning',
       siteName: '',
+      sitePostalCode: '',
+      sitePrefecture: '',
+      siteCity: '',
       siteAddress: '',
       scheduledStart: '',
       scheduledEnd: '',
@@ -92,6 +103,8 @@ export default function ProjectFormPage() {
       companyId: isAdmin ? '' : (user?.companyId ?? ''),
     },
   });
+
+  const postalCode = watch('sitePostalCode');
 
   useEffect(() => {
     const load = async () => {
@@ -110,6 +123,9 @@ export default function ProjectFormPage() {
             description: project.description ?? '',
             status: project.status as ProjectFormValues['status'],
             siteName: project.siteName ?? '',
+            sitePostalCode: (project as any).sitePostalCode ?? '',
+            sitePrefecture: (project as any).sitePrefecture ?? '',
+            siteCity: (project as any).siteCity ?? '',
             siteAddress: project.siteAddress ?? '',
             scheduledStart: project.scheduledStart
               ? project.scheduledStart.substring(0, 10)
@@ -122,6 +138,9 @@ export default function ProjectFormPage() {
             geofenceRadiusM: project.geofenceRadiusM ?? 200,
             companyId: project.companyId ?? '',
           });
+          if (project.siteLat && project.siteLng) {
+            setMapLocation({ lat: Number(project.siteLat), lng: Number(project.siteLng) });
+          }
         }
       } catch (err) {
         console.error('Failed to load data:', err);
@@ -131,6 +150,52 @@ export default function ProjectFormPage() {
     };
     load();
   }, [id, isEdit, isAdmin, reset]);
+
+  // 郵便番号検索
+  const handlePostalSearch = useCallback(async () => {
+    const code = postalCode?.replace(/[-ー−]/g, '');
+    if (!code || code.length < 7) return;
+    setPostalSearching(true);
+    try {
+      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${code}`);
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        const result = data.results[0];
+        setValue('sitePrefecture', result.address1, { shouldDirty: true });
+        setValue('siteCity', result.address2, { shouldDirty: true });
+        setValue('siteAddress', result.address3, { shouldDirty: true });
+
+        // 住所から地図を検索
+        const fullAddress = `${result.address1}${result.address2}${result.address3}`;
+        try {
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}&countrycodes=jp&limit=1`,
+            { headers: { 'Accept-Language': 'ja' } },
+          );
+          const geoData = await geoRes.json();
+          if (geoData.length > 0) {
+            setMapLocation({ lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) });
+          }
+        } catch { /* geocoding失敗は無視 */ }
+      }
+    } catch {
+      console.error('郵便番号検索に失敗しました');
+    } finally {
+      setPostalSearching(false);
+    }
+  }, [postalCode, setValue]);
+
+  // 郵便番号が7桁になったら自動検索
+  useEffect(() => {
+    const code = postalCode?.replace(/[-ー−]/g, '');
+    if (code && code.length === 7) {
+      handlePostalSearch();
+    }
+  }, [postalCode, handlePostalSearch]);
+
+  const handleMapChange = useCallback((latlng: { lat: number; lng: number }) => {
+    setMapLocation(latlng);
+  }, []);
 
   const onSubmit = async (values: ProjectFormValues) => {
     setSubmitError(null);
@@ -144,9 +209,17 @@ export default function ProjectFormPage() {
       if (values.projectCode) dto.projectCode = values.projectCode;
       if (values.description) dto.description = values.description;
       if (values.siteName) dto.siteName = values.siteName;
+      if (values.sitePostalCode) dto.sitePostalCode = values.sitePostalCode;
+      if (values.sitePrefecture) dto.sitePrefecture = values.sitePrefecture;
+      if (values.siteCity) dto.siteCity = values.siteCity;
       if (values.siteAddress) dto.siteAddress = values.siteAddress;
       if (values.scheduledStart) dto.scheduledStart = values.scheduledStart;
       if (values.scheduledEnd) dto.scheduledEnd = values.scheduledEnd;
+
+      if (mapLocation) {
+        dto.siteLat = mapLocation.lat;
+        dto.siteLng = mapLocation.lng;
+      }
 
       const contractAmount = Number(values.contractAmount);
       if (!isNaN(contractAmount) && values.contractAmount !== '' && values.contractAmount !== undefined) {
@@ -243,10 +316,50 @@ export default function ProjectFormPage() {
           error={errors.siteName?.message}
         />
 
+        {/* 郵便番号検索 */}
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-gray-700">郵便番号</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="w-40 rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="1500043"
+              maxLength={8}
+              {...register('sitePostalCode')}
+            />
+            <button
+              type="button"
+              onClick={handlePostalSearch}
+              disabled={postalSearching}
+              className="shrink-0 rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {postalSearching ? '検索中...' : '住所検索'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400">7桁入力で自動検索されます</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="都道府県"
+            {...register('sitePrefecture')}
+          />
+          <Input
+            label="市区町村"
+            {...register('siteCity')}
+          />
+        </div>
+
         <Input
           label="現場住所"
           {...register('siteAddress')}
           error={errors.siteAddress?.message}
+        />
+
+        {/* 地図 */}
+        <MapLocationPicker
+          value={mapLocation}
+          onChange={handleMapChange}
         />
 
         <div className="grid grid-cols-2 gap-4">

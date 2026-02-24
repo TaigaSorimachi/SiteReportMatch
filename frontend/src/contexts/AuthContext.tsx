@@ -3,6 +3,8 @@ import type { UserSummary } from '@/types/api';
 import { authApi } from '@/lib/api/auth';
 import { setTokens, clearTokens, getAccessToken } from '@/lib/auth';
 import { initLiff, getLiffAccessToken } from '@/lib/liff';
+import { isDemoMode } from '@/lib/demo';
+import { mockFrontendUser } from '@/lib/demo-data/auth';
 
 interface AuthContextValue {
   user: UserSummary | null;
@@ -19,6 +21,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setTokens('demo-frontend-token', 'demo-frontend-refresh-token');
+      setUser(mockFrontendUser);
+      setIsLoading(false);
+      return;
+    }
     (async () => {
       try {
         await initLiff();

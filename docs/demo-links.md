@@ -4,9 +4,9 @@
 
 | 画面 | URL |
 |------|-----|
-| 作業者アプリ | https://fellow-fingers-simulation-experiencing.trycloudflare.com/ |
-| 管理画面 | https://fellow-fingers-simulation-experiencing.trycloudflare.com/admin |
-| API ドキュメント | https://fellow-fingers-simulation-experiencing.trycloudflare.com/api/docs |
+| 作業者アプリ | https://prevention-enhance-bacterial-nothing.trycloudflare.com/ |
+| 管理画面 | https://prevention-enhance-bacterial-nothing.trycloudflare.com/admin |
+| API ドキュメント | https://prevention-enhance-bacterial-nothing.trycloudflare.com/api/docs |
 
 ## ログイン情報
 

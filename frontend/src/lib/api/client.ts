@@ -1,6 +1,8 @@
 import axios from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from '@/lib/auth';
+import { isDemoMode } from '@/lib/demo';
+import { handleMockRequest } from '@/lib/demo-data/mock-handler';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -8,6 +10,17 @@ export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL + '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Demo mode: intercept all requests and return mock data
+if (isDemoMode) {
+  apiClient.interceptors.request.use((config) => {
+    const mockResponse = handleMockRequest(config);
+    if (mockResponse) {
+      config.adapter = () => Promise.resolve(mockResponse);
+    }
+    return config;
+  });
+}
 
 apiClient.interceptors.request.use((config) => {
   const token = getAccessToken();

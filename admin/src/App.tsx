@@ -9,6 +9,8 @@ import MemberListPage from '@/pages/members/MemberListPage';
 import MemberFormPage from '@/pages/members/MemberFormPage';
 import ProjectListPage from '@/pages/projects/ProjectListPage';
 import ProjectFormPage from '@/pages/projects/ProjectFormPage';
+import ReportsListPage from '@/pages/reports/ReportsListPage';
+import ReportDetailPage from '@/pages/reports/ReportDetailPage';
 
 export default function App() {
   return (
@@ -26,6 +28,8 @@ export default function App() {
             <Route path="projects" element={<ProjectListPage />} />
             <Route path="projects/new" element={<ProjectFormPage />} />
             <Route path="projects/:id" element={<ProjectFormPage />} />
+            <Route path="reports" element={<ReportsListPage />} />
+            <Route path="reports/:id" element={<ReportDetailPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

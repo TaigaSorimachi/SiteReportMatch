@@ -1,0 +1,48 @@
+import { uuid } from './helpers';
+import type { Company } from '@/types/api';
+
+export const companies: Company[] = [
+  {
+    id: uuid(1),
+    companyName: 'デモ建設株式会社',
+    companyNameKana: 'デモケンセツカブシキガイシャ',
+    companyType: 'general_contractor',
+    corporateNumber: '1234567890123',
+    representative: '山田太郎',
+    postalCode: '100-0001',
+    address: '東京都千代田区丸の内1-1-1',
+    phone: '03-1234-5678',
+    email: 'info@demo-kensetsu.co.jp',
+    website: 'https://demo-kensetsu.co.jp',
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: uuid(2),
+    companyName: '東京電設工業株式会社',
+    companyNameKana: 'トウキョウデンセツコウギョウカブシキガイシャ',
+    companyType: 'subcontractor',
+    corporateNumber: '9876543210987',
+    representative: '鈴木一郎',
+    postalCode: '150-0002',
+    address: '東京都渋谷区渋谷3-5-10',
+    phone: '03-9876-5432',
+    email: 'info@tokyo-densetsu.co.jp',
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: uuid(3),
+    companyName: '関東左官工業有限会社',
+    companyNameKana: 'カントウサカンコウギョウユウゲンガイシャ',
+    companyType: 'subcontractor',
+    corporateNumber: '5555666677778',
+    representative: '田中義男',
+    postalCode: '330-0801',
+    address: '埼玉県さいたま市大宮区土手町1-2-3',
+    phone: '048-123-4567',
+    email: 'info@kanto-sakan.co.jp',
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];

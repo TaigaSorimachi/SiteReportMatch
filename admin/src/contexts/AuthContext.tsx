@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { authApi } from '@/lib/api/auth';
 import { setTokens, clearTokens, getAccessToken } from '@/lib/auth';
+import { isDemoMode } from '@/lib/demo';
+import { mockAdminUser } from '@/lib/demo-data/auth';
 import type { UserSummary } from '@/types/api';
 
 interface AuthState {
@@ -34,6 +36,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isDemoMode) {
+      setTokens('demo-admin-token', 'demo-admin-refresh-token');
+      setUser(mockAdminUser);
+      setIsLoading(false);
+      return;
+    }
     const token = getAccessToken();
     if (token) {
       fetchMe();
