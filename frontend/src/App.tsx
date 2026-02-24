@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-rou
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { DemoBanner } from '@/components/ui/DemoBanner';
 
 // Auth
 import { LoginPage } from '@/pages/auth/LoginPage';
@@ -50,6 +51,7 @@ function ProtectedLayout() {
   if (!user) return <Navigate to="/login" replace />;
   return (
     <div className="min-h-screen bg-gray-50">
+      <DemoBanner />
       <Outlet />
       <BottomNav />
     </div>

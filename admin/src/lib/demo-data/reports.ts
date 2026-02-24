@@ -1,0 +1,102 @@
+import { uuid } from './helpers';
+import type { DailyReport } from '@/types/api';
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split('T')[0];
+}
+
+function clockTime(date: string, hour: number, min: number = 0): string {
+  return `${date}T${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00.000Z`;
+}
+
+const weathers = ['晴れ', '曇り', '雨', '晴れ', '晴れ', '曇り', '晴れ'];
+
+function generateReports(): DailyReport[] {
+  const reports: DailyReport[] = [];
+  const workerConfigs = [
+    { workerId: uuid(11), projectId: uuid(20), projectName: '渋谷駅前再開発ビル新築工事', projectCode: 'PRJ-2026-001', lastName: '佐藤', firstName: '花子', startH: 8, endH: 17, content: '内装下地処理・ボード張り作業' },
+    { workerId: uuid(13), projectId: uuid(20), projectName: '渋谷駅前再開発ビル新築工事', projectCode: 'PRJ-2026-001', lastName: '田中', firstName: '健一', startH: 7, endH: 17, content: '型枠組立作業' },
+    { workerId: uuid(14), projectId: uuid(20), projectName: '渋谷駅前再開発ビル新築工事', projectCode: 'PRJ-2026-001', lastName: '高橋', firstName: '勇気', startH: 7, endH: 16, content: 'とび工事・足場組替え' },
+    { workerId: uuid(15), projectId: uuid(20), projectName: '渋谷駅前再開発ビル新築工事', projectCode: 'PRJ-2026-001', lastName: '伊藤', firstName: '大輔', startH: 8, endH: 18, content: '電気配線工事' },
+    { workerId: uuid(17), projectId: uuid(21), projectName: '品川マンション大規模修繕工事', projectCode: 'PRJ-2026-002', lastName: '小林', firstName: '正和', startH: 8, endH: 17, content: '外壁左官補修作業' },
+    { workerId: uuid(18), projectId: uuid(21), projectName: '品川マンション大規模修繕工事', projectCode: 'PRJ-2026-002', lastName: '加藤', firstName: '美咲', startH: 8, endH: 17, content: '左官仕上げ作業' },
+    { workerId: uuid(19), projectId: uuid(20), projectName: '渋谷駅前再開発ビル新築工事', projectCode: 'PRJ-2026-001', lastName: '吉田', firstName: '隆司', startH: 8, endH: 17, content: '管工事・空調ダクト接続' },
+  ];
+
+  let idCounter = 2000;
+
+  for (let dayOffset = 1; dayOffset <= 20; dayOffset++) {
+    const d = new Date();
+    d.setDate(d.getDate() - dayOffset);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+
+    const dateStr = daysAgo(dayOffset);
+    const weather = weathers[dayOffset % weathers.length];
+    const temp = 8 + (dayOffset % 7);
+
+    for (const wc of workerConfigs) {
+      const workMin = (wc.endH - wc.startH) * 60 - 60;
+
+      let status = 'approved';
+      let approvedBy: string | undefined = uuid(10);
+      let approvedAt: string | undefined = clockTime(dateStr, 20);
+      if (dayOffset <= 2) {
+        status = 'submitted';
+        approvedBy = undefined;
+        approvedAt = undefined;
+      } else if (dayOffset === 5 && wc.workerId === uuid(11)) {
+        status = 'rejected';
+        approvedBy = undefined;
+        approvedAt = undefined;
+      }
+
+      reports.push({
+        id: uuid(idCounter++),
+        companyId: uuid(1),
+        projectId: wc.projectId,
+        workerId: wc.workerId,
+        reportDate: dateStr,
+        inputMode: wc.projectId === uuid(21) ? 'batch' : 'realtime',
+        clockIn: clockTime(dateStr, wc.startH),
+        clockOut: clockTime(dateStr, wc.endH),
+        breakMinutes: 60,
+        workMinutes: workMin,
+        manDays: 1.0,
+        overtimeMinutes: workMin > 480 ? workMin - 480 : 0,
+        workContent: wc.content,
+        progressPct: Math.min(100, Math.floor((20 - dayOffset) / 20 * 100)),
+        weather,
+        temperature: temp,
+        status,
+        submittedAt: clockTime(dateStr, wc.endH),
+        approvedBy,
+        approvedAt,
+        rejectionReason: status === 'rejected' ? '作業内容の詳細を追記してください' : undefined,
+        createdAt: clockTime(dateStr, wc.endH),
+        project: { id: wc.projectId, projectName: wc.projectName, projectCode: wc.projectCode },
+        worker: { id: wc.workerId, lastName: wc.lastName, firstName: wc.firstName },
+        costItems: [],
+      });
+    }
+  }
+
+  // Add cost items to first few reports
+  if (reports[0]) {
+    reports[0].costItems = [
+      { id: uuid(3000), reportId: reports[0].id, costType: 'material', itemName: '石膏ボード 12.5mm', quantity: 50, unit: '枚', unitPrice: 450, amount: 22500 },
+      { id: uuid(3001), reportId: reports[0].id, costType: 'material', itemName: 'ビス（ボード用）', quantity: 5, unit: '箱', unitPrice: 800, amount: 4000 },
+    ];
+  }
+  if (reports[1]) {
+    reports[1].costItems = [
+      { id: uuid(3002), reportId: reports[1].id, costType: 'material', itemName: '型枠用合板', quantity: 30, unit: '枚', unitPrice: 1800, amount: 54000 },
+      { id: uuid(3003), reportId: reports[1].id, costType: 'rental', itemName: 'クレーン使用料', quantity: 1, unit: '日', unitPrice: 85000, amount: 85000 },
+    ];
+  }
+
+  return reports;
+}
+
+export const reports: DailyReport[] = generateReports();

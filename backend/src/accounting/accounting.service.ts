@@ -430,30 +430,16 @@ export class AccountingService {
       categoryMap[group.costCategory] = group._sum.amount ?? BigInt(0);
     }
 
-    const laborCost = Number(categoryMap['labor'] ?? BigInt(0));
-    const materialCost = Number(categoryMap['material'] ?? BigInt(0));
-    const equipmentCost = Number(categoryMap['equipment'] ?? BigInt(0));
-    const transportCost = Number(categoryMap['transport'] ?? BigInt(0));
-    const otherCost = Number(categoryMap['other'] ?? BigInt(0));
-    const totalCost = laborCost + materialCost + equipmentCost + transportCost + otherCost;
+    const byCategory = Object.entries(categoryMap)
+      .map(([category, amount]) => ({ category, total: Number(amount) }))
+      .filter((c) => c.total > 0);
 
-    const contractAmount = project.contractAmount ? Number(project.contractAmount) : null;
-    const profitMargin =
-      contractAmount && contractAmount > 0
-        ? Math.round(((contractAmount - totalCost) / contractAmount) * 10000) / 100
-        : null;
+    const totalCost = byCategory.reduce((sum, c) => sum + c.total, 0);
 
     return {
       projectId: project.id,
-      projectName: project.projectName,
-      laborCost,
-      materialCost,
-      equipmentCost,
-      transportCost,
-      otherCost,
       totalCost,
-      contractAmount,
-      profitMargin,
+      byCategory,
     };
   }
 

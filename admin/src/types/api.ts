@@ -54,6 +54,46 @@ export interface User {
   createdAt: string;
 }
 
+export interface DailyReport {
+  id: string;
+  companyId: string;
+  projectId: string;
+  workerId: string;
+  reportDate: string;
+  inputMode: string;
+  clockIn?: string;
+  clockOut?: string;
+  breakMinutes: number;
+  workMinutes?: number;
+  manDays?: number;
+  overtimeMinutes: number;
+  workContent?: string;
+  progressPct?: number;
+  weather?: string;
+  temperature?: number;
+  status: string;
+  submittedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  notes?: string;
+  createdAt: string;
+  project?: { id: string; projectName: string; projectCode?: string };
+  worker?: { id: string; lastName: string; firstName: string };
+  costItems?: ReportCostItem[];
+}
+
+export interface ReportCostItem {
+  id: string;
+  reportId: string;
+  costType: string;
+  itemName: string;
+  quantity?: number;
+  unit?: string;
+  unitPrice?: number;
+  amount?: number;
+}
+
 export interface Project {
   id: string;
   companyId: string;
